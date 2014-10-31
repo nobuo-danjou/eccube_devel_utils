@@ -20,7 +20,7 @@ my $app = sub {
         return [200, ['Content-Type' => 'text/plain'], ['you are using ostore test server on '.$req->uri]];
     } elsif ($path =~ m{^/upgrade/index.php$}) {
         if ($req->param('mode') eq 'download') { return &download($req) } 
-        elsif ($req->param('mode') eq 'product_list') { return &products_list($req) }
+        elsif ($req->param('mode') eq 'products_list') { return &products_list($req) }
     } elsif ($path =~ m{^/download}) {
         open my $fh, '<', $distfile or die;
         return [200, [

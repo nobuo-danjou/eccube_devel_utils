@@ -24,7 +24,7 @@ $dir->recurse(callback => sub {
         (my $dest = "$item") =~ s{files/}{};
         my $sha1 = Digest::SHA1->new;
         $sha1->addfile($item->openr);
-        $distinfo .= sprintf("'%s' => MODULE_REALDIR . '%s',\n", $sha1->hexdigest, $dest);
+        $distinfo .= sprintf("'%s' => MODULE_REALDIR . '%s',\n", $sha1->hexdigest, file($dest)->relative($parent));
         $tar->add_data($item->relative($parent), do {local $/; $item->slurp});
     }
 );
