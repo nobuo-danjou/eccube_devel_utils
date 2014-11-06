@@ -16,6 +16,7 @@ $distinfo = array(
 END
 
 $tar = Archive::Tar->new;
+$Archive::Tar::DO_NOT_USE_PREFIX = 1;
 my $dir = $dist_dir->subdir('files');
 $dir->recurse(callback => sub {
         my $item = shift;
