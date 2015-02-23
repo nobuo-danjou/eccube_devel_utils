@@ -10,6 +10,14 @@ my $dist_dir = dir($dist);
 my $name = $dist_dir->basename;
 my $parent = $dist_dir->parent;
 
+if (`cd $dist;git status --short|wc -l` > 0) {
+    die 'git status is not clean';
+}
+chomp(my $revision = `cd $dist;git log -1 --pretty='%h'`);
+my $product_id = get_php_constant("$dist/files/include.php", sprintf('%s_OSTORE_PRODUCT_ID', uc($name)));
+my $version = get_php_constant("$dist/files/include.php", sprintf('%s_VERSION', uc($name)));
+my $compliant_version = get_php_constant("$dist/files/include.php", sprintf('%s_COMPLIANT_VERSION', uc($name)));
+
 my $distinfo = <<'END';
 <?php
 $distinfo = array(
@@ -31,4 +39,11 @@ $dir->recurse(callback => sub {
 );
 $distinfo .= ");\n";
 $tar->add_data($dist_dir->file("/distinfo.php")->relative($parent), $distinfo);
-$tar->write("$name.tar.gz", COMPRESS_GZIP); 
+$tar->write("$product_id-$name-$version-eccube-$compliant_version-$revision.tar.gz", COMPRESS_GZIP); 
+
+sub get_php_constant {
+    my ($file, $constant) = @_;
+    my $result = `grep $constant $file|cut -d, -f2`;
+    $result =~ s/['"); \r\n]+//g;
+    return $result;
+}

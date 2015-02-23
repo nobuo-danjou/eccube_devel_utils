@@ -7,26 +7,18 @@ use JSON 'encode_json';
 use MIME::Base64 'encode_base64';
 use Time::Piece;
 use File::Basename;
-
-my $distfile = $ENV{'ECCUBE_DIST_FILE'} or die 'ECCUBE_DIST_FILE environment variable needed';
--f $distfile or die 'distfile not found!';
-my $basename = basename($distfile);
-my $product_code = basename($distfile, '.tar.gz');
+use Data::Dumper;
 
 my $app = sub {
     my $req = Plack::Request->new(shift);
     my $path = $req->uri->path;
-    if ($path =~ m{^/info/$}) {
+    if ($path =~ m{^/(store_)?info/$}) {
         return [200, ['Content-Type' => 'text/plain'], ['you are using ostore test server on '.$req->uri]];
     } elsif ($path =~ m{^/upgrade/index.php$}) {
         if ($req->param('mode') eq 'download') { return &download($req) } 
         elsif ($req->param('mode') eq 'products_list') { return &products_list($req) }
-    } elsif ($path =~ m{^/download}) {
-        open my $fh, '<', $distfile or die;
-        return [200, [
-                'Content-Type' => 'binary/octet-stream',
-                'Content-Disposition' => qq(attatchment; filename="$basename"),
-            ], $fh];
+    } else {
+        return [302, ['Location' => 'http://www.ec-cube.net'.$req->uri->path_query],['']];
     }
     return &return_404;
 };
@@ -35,28 +27,48 @@ sub return_404 {
     return [404, ['Content-Type' => 'text/plain'], ['not found']];
 }
 
+sub get_archives {
+    my $version = shift;
+    my @ver = split(/\./, $version);
+    my @files = map {
+        my $filename = $_;
+        my @parts = split(/-/, $filename); # 999-mdl_foobar-0.0.1-eccube-2.13.0-fffffff.tar.gz
+        my @compliant_version = split(/\./, $parts[4]);
+        my $download_flg = 
+            $ver[0] != $compliant_version[0] ? 0 :
+            $ver[1] != $compliant_version[1] ? 0 :
+            $ver[2] >= $compliant_version[2] ? 1 : 0;
+        {
+            id => $parts[0],
+            name => $parts[1],
+            version => $parts[2],
+            download_flg => $download_flg,
+        }
+    } glob('*.tar.gz');
+    return @files;
+}
+
 sub products_list {
     my $req = shift;
+    my @files = get_archives($req->param('ver'));
 
     my $json = {
         status => 'SUCCESS',
         errcode => undef,
         msg => '',
-        data => [
-            {
-                download_flg => 1,
-                eccube_version_flg => 2,
-                installed_flg => 1,
-                installed_version => 'devel',
+        data => [ map { {
+                download_flg => $_->{download_flg},
+                installed_flg => 0,
+                installed_version => '',
                 last_update_date => localtime->strftime('%F %T'),
                 main_list_comment => '',
                 main_list_image => 'noimage.gif',
-                name => 'your devel module',
-                product_id => '999',
-                status => '使用できます',
-                version => 'devel',
+                name => $_->{name},
+                product_id => $_->{id},
+                status => $_->{download_flg} ? '使用できます' : "使用できません\n対応バージョンを\n確認してください",
+                version => $_->{version},
                 version_up_flg => '0',
-            }
+            } } @files
         ]
     };
     return [
@@ -68,26 +80,23 @@ sub products_list {
 
 sub download {
     my $req = shift;
+    my ($filename) = glob(sprintf('%d-*.tar.gz', $req->param('product_id')));
 
-    if ($req->param('product_id') == 999) {
-        open my $fh, '<', $distfile or die;
+    if ($filename) {
+        open my $fh, '<', $filename or die;
         my $file = do {local $/; <$fh>};
         close $fh;
+        my @parts = split(/-/, $filename);
         my $json = {
             status => 'SUCCESS',
             errcode => undef,
             msg => '',
             data => {
-                product_name => 'your devel module',
-                download_flg => '1',
-                version => 'devel',
-                eccube_version_flg => '1',
-                order_id => '99999',
-                product_id => '999',
-                status => '11',
-                installed_flg => '1',
-                installed_version => 'devel',
-                product_code => $product_code,
+                product_id => $parts[0],
+                product_name => $parts[1],
+                version => $parts[2],
+                product_code => $parts[1],
+                module_filename => '',
                 dl_file => encode_base64($file),
             }
         };
